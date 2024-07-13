@@ -63,3 +63,34 @@ import { logger, format } from "xtra-logger";
 ```
 
 <br>
+
+## Usage Examples:
+
+***Logging features:***
+- 5 Log methods available
+- Changable timezome for Docker / Remote servers
+- Log format : `[ DD.MM.YY - HH:MM:SS ] - [ TYPE ] - MESSAGE`
+
+```js
+import { logger, format } from "xtra-logger";
+
+// Changing the timezone of logger [ optional ] (By default it will use system time)
+logger.timeZone("Asia/Kolkata");
+
+// Logging options
+logger.info("Starting the server...");
+logger.warn("Using node v:18.6");
+logger.success("Server started successfully.");
+logger.debug("NPM update available.");
+logger.error("An error occurd in the server.");
+```
+
+*Output:*
+
+![image](https://github.com/user-attachments/assets/68f7fd75-ff9f-454a-8f6f-851add11255c)
+
+<br>
+
+***Text formatting features:***
+- 50+ text formatting / colorizing options available.
+- Multiple formatting can be combined together to create new style.
