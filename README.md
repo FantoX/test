@@ -70,6 +70,8 @@ import { logger, format } from "xtra-logger";
 - 5 Log methods available
 - Changable timezome for Docker / Remote servers
 - Log format : `[ DD.MM.YY - HH:MM:SS ] - [ TYPE ] - MESSAGE`
+  
+*Example :*
 
 ```js
 import { logger, format } from "xtra-logger";
@@ -85,7 +87,7 @@ logger.debug("NPM update available.");
 logger.error("An error occurd in the server.");
 ```
 
-*Output:*
+*Output :*
 
 ![image](https://github.com/user-attachments/assets/68f7fd75-ff9f-454a-8f6f-851add11255c)
 
@@ -94,3 +96,29 @@ logger.error("An error occurd in the server.");
 ***Text formatting features:***
 - 50+ text formatting / colorizing options available.
 - Multiple formatting can be combined together to create new style.
+
+*Example :*
+
+```js
+import { logger, format } from "xtra-logger";
+// Only bold text
+console.log(format.bold("This is a Bold text\n"));
+
+// Combining colours + multiple formatting
+console.log(format.bold(format.italic(format.cyan("This is a Bold + Italic + Cyan colour text \n"))));
+
+console.log(
+  format.bgBrightmagenta(
+    format.strikethrough(
+      format.lightwhite(
+        "This is a strikethrough + light white text with bright magenta background"
+      )
+    )
+  )
+);
+```
+
+*Output :*
+
+![image](https://github.com/user-attachments/assets/6dca26ee-0929-4405-869a-b81513b0a2a1)
+
