@@ -89,7 +89,10 @@ logger.error("An error occurd in the server.");
 
 *Output :*
 
-![image](https://github.com/user-attachments/assets/68f7fd75-ff9f-454a-8f6f-851add11255c)
+<a href="#">
+    <img src="https://github.com/user-attachments/assets/68f7fd75-ff9f-454a-8f6f-851add11255c" alt="Formatting example output">
+</a>
+
 
 <br>
 
@@ -121,5 +124,13 @@ console.log(
 
 *Output :*
 
-![image](https://github.com/user-attachments/assets/6dca26ee-0929-4405-869a-b81513b0a2a1)
+<a href="#">
+    <img src="https://github.com/user-attachments/assets/6dca26ee-0929-4405-869a-b81513b0a2a1" alt="Formatting example output">
+</a>
 
+<br>
+
+## Contributing:
+I don't have any contributors in this project yet. Feel free to contribute and making it better.
+- Coded by [FantoX](https://github.com/FantoX)
+- License [GNU General Public License v3.0](https://github.com/FantoX/xtra-logger/blob/main/LICENSE)
