@@ -14,11 +14,13 @@
 
 ## Compatibility:
 
-| Feature | Availability |
+| Version | Compatibility |
 |----------|----------|
 | Es5 Javascript    | <div align="center">✅</div>   | 
 | Es6 Javascript    | <div align="center">✅</div>   | 
 | Typescript    | <div align="center">✅</div>   |
+
+<br>
 
 ## Features:
 
