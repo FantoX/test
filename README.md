@@ -10,4 +10,14 @@
   </p>
 </div>
 
+<br>
 
+## Features:
+
+| Feature | Availability |
+|----------|----------|
+| Logging    | <div align="center">✅</div>   | 
+| Text Formatting    | <div align="center">✅</div>   | 
+| Console Colorize    | <div align="center">✅</div>   |
+| Combined Formatting    | <div align="center">✅</div>   |
+| Size    | <div align="center">17 kb</div>   | 
