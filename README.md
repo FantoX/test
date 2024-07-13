@@ -129,8 +129,14 @@ console.log(
 </a>
 
 <br>
+<br>
+
 
 ## Contributing:
 I don't have any contributors in this project yet. Feel free to contribute and making it better.
 - Coded by [FantoX](https://github.com/FantoX)
+- - Written in [Typescript](https://www.typescriptlang.org/docs/handbook/intro.html)
 - License [GNU General Public License v3.0](https://github.com/FantoX/xtra-logger/blob/main/LICENSE)
+
+<br>
+<br>
