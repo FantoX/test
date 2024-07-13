@@ -68,7 +68,7 @@ import { logger, format } from "xtra-logger";
 
 ***Logging features:***
 - 5 Log methods available
-- Changable timezome for Docker / Remote servers
+- Changable timezome for Docker / Remote servers ( Get your time zome name from [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) )
 - Log format : `[ DD.MM.YY - HH:MM:SS ] - [ TYPE ] - MESSAGE`
   
 *Example :*
@@ -101,6 +101,7 @@ logger.error("An error occurd in the server.");
 
 ```js
 import { logger, format } from "xtra-logger";
+
 // Only bold text
 console.log(format.bold("This is a Bold text\n"));
 
