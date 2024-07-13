@@ -12,6 +12,14 @@
 
 <br>
 
+## Compatibility:
+
+| Feature | Availability |
+|----------|----------|
+| Es5 Javascript    | <div align="center">✅</div>   | 
+| Es6 Javascript    | <div align="center">✅</div>   | 
+| Typescript    | <div align="center">✅</div>   |
+
 ## Features:
 
 | Feature | Availability |
@@ -21,3 +29,35 @@
 | Console Colorize    | <div align="center">✅</div>   |
 | Combined Formatting    | <div align="center">✅</div>   |
 | Size    | <div align="center">17 kb</div>   | 
+
+<br>
+
+## Installation:
+Node Package Manager (NPM)
+```bash
+npm i xtra-logger
+```
+
+Yet Another Resource Navigator (YARN)
+
+```bash
+yarn add xtra-logger
+```
+
+<br>
+
+## Importing:
+
+For Es5 Js
+
+```js
+const { logger, format } = require("xtra-logger");
+```
+
+For Es6 Js / Typescript
+
+```js
+import { logger, format } from "xtra-logger";
+```
+
+<br>
