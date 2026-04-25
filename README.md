@@ -250,7 +250,7 @@ Sunday 02:00  cluster-config-weekly (Velero)  weekly full-cluster snapshot
 | critical-app-6h (Velero) | 48 hours (≈ 8 restore points) |
 | cluster-config-weekly (Velero) | 14 days (≈ 2 restore points) |
 | pg-dumps | 7 days |
-| image snapshots | 14 days |
+| image snapshots | 1 day (today + yesterday; configurable via `IMAGE_BACKUP_RETENTION_DAYS`) |
 
 ---
 
