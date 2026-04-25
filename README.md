@@ -549,9 +549,44 @@ sudo /usr/local/sbin/pg-restore.sh --latest
 sudo /usr/local/sbin/pg-restore.sh /backup/pg-dumps/hippo_backup_20240423_120000.sql.gz
 ```
 
-> **Safety:** The restore script takes a pre-restore safety dump first. If anything goes wrong, you can roll back to the pre-restore state using the safety dump path printed at the end.
+### Interactive confirmation flow
 
-> **Confirmation:** The script requires you to type `RESTORE` to proceed — this prevents accidental runs.
+The script asks **two separate confirmations** before touching any data:
+
+```
+1. Type RESTORE  →  confirm the restore operation
+2. Type DROP     →  drop and recreate the database (clean slate)
+   Type SKIP     →  restore into the existing database
+   Anything else →  cancel (safety dump is kept)
+```
+
+**Always type `DROP` when:**
+- Restoring one server's backup onto a different server
+- Re-deploying to a cluster that already has the database running
+- You see errors like `database already exists`, `schema already exists`, or `relation already exists`
+
+**Type `SKIP` only when** you want to replay a partial dump on top of existing data (rare).
+
+### What the script does internally
+
+```
+1. Verifies sha256 checksum and gzip integrity of the dump file
+2. Checks the postgres pod is Running
+3. Asks: Type RESTORE to proceed
+4. Takes a pre-restore safety dump  →  /backup/pg-dumps/pre-restore_<db>_<ts>.sql.gz
+5. Asks: Type DROP / SKIP / cancel
+   DROP → terminates all DB connections → DROP DATABASE → CREATE DATABASE
+   SKIP → proceeds without touching the schema
+6. Copies the dump file into the pod
+7. Runs psql restore with ON_ERROR_STOP=1
+8. Cleans up temp files from the pod
+```
+
+> **Rollback:** If the restore fails, the safety dump path is printed. Restore from it with:
+> ```bash
+> sudo /usr/local/sbin/pg-restore.sh /backup/pg-dumps/pre-restore_hippo_<timestamp>.sql.gz
+> ```
+> At the DROP/SKIP prompt, type `SKIP` to restore the safety dump into the existing (partially restored) database.
 
 ---
 
