@@ -17,10 +17,11 @@
 7. [What Gets Installed](#7-what-gets-installed)
 8. [Scheduled Backup Cadence](#8-scheduled-backup-cadence)
 9. [How to Restore a Namespace](#9-how-to-restore-a-namespace)
-10. [How to Restore PostgreSQL Data](#10-how-to-restore-postgresql-data)
-11. [Day-2 Operations](#11-day-2-operations)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Uninstall](#13-uninstall)
+10. [End-to-End Restore Verification Drill](#10-end-to-end-restore-verification-drill)
+11. [How to Restore PostgreSQL Data](#11-how-to-restore-postgresql-data)
+12. [Day-2 Operations](#12-day-2-operations)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Uninstall](#14-uninstall)
 
 ---
 
@@ -389,7 +390,146 @@ velero restore describe <restore-name> --details
 
 ---
 
-## 10. How to Restore PostgreSQL Data
+## 10. End-to-End Restore Verification Drill
+
+Run this procedure after every new server deployment to confirm the full backup → delete → restore cycle works correctly before handing over to production.
+
+---
+
+### Step 1 — Save current state (before anything is touched)
+
+```bash
+mkdir -p /prov/before
+
+# Capture running pod → image mapping
+kubectl get pods -n prov-eng \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}' \
+  > /prov/before/pod-images.txt
+
+# Save full specs
+kubectl get deploy -n prov-eng -o yaml > /prov/before/deployments.yaml
+kubectl get svc    -n prov-eng -o yaml > /prov/before/services.yaml
+kubectl get pvc    -n prov-eng -o yaml > /prov/before/pvcs.yaml
+kubectl get all    -n prov-eng         > /prov/before/all-resources.txt
+
+# Show what was saved
+echo "--- Before state ---"
+cat /prov/before/pod-images.txt
+```
+
+---
+
+### Step 2 — Take a fresh Velero backup right now
+
+Do not rely on the last scheduled backup — take one immediately so the restore reflects the exact live state.
+
+```bash
+velero backup create pre-delete-verify-$(date +%Y%m%d%H%M%S) \
+  --include-namespaces prov-eng \
+  --ttl 48h \
+  --wait
+
+# Note the backup name from the output — you will use it in Step 5
+velero backup get | grep pre-delete-verify
+```
+
+---
+
+### Step 3 — Take a fresh image snapshot
+
+```bash
+sudo systemctl start image-backup.service
+
+# Tail the log until you see "image-backup completed"
+journalctl -u image-backup.service -f --no-tail
+# Press Ctrl+C when done
+```
+
+---
+
+### Step 4 — Delete the namespace
+
+PVCs are deleted automatically with the namespace. PVs stay alive in `Released` state — the restore script handles clearing them.
+
+```bash
+kubectl delete ns prov-eng
+
+# Confirm it is gone
+kubectl get ns prov-eng
+# Expected: Error from server (NotFound)
+```
+
+---
+
+### Step 5 — Run the restore
+
+Use the exact backup name from Step 2.
+
+```bash
+cd /opt/velero-airgap
+sudo -E ./2-deploy-velero.sh restore --namespace prov-eng \
+  --backup pre-delete-verify-<TIMESTAMP>
+```
+
+The script runs 4 steps automatically:
+1. Pre-load Docker images from the blob store
+2. Clear stale PV `claimRef` so PVCs can rebind
+3. Run `velero restore create --wait`
+4. Patch `imagePullPolicy=IfNotPresent` on all restored workloads
+
+---
+
+### Step 6 — Verify end-to-end
+
+```bash
+mkdir -p /prov/after
+
+# Wait for all pods to be Ready
+kubectl wait --for=condition=Ready pod --all -n prov-eng --timeout=300s
+
+# Capture restored state
+kubectl get pods -n prov-eng \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}' \
+  > /prov/after/pod-images.txt
+
+kubectl get all -n prov-eng > /prov/after/all-resources.txt
+
+# --- Check 1: image versions match ---
+echo "=== IMAGE DIFF (before vs after) ==="
+diff /prov/before/pod-images.txt /prov/after/pod-images.txt \
+  && echo "IDENTICAL — all images match" \
+  || echo "DIFFERENCES FOUND — check above"
+
+# --- Check 2: deployment count matches ---
+echo "=== DEPLOYMENT COUNT ==="
+echo "Before: $(grep '^kind: Deployment' /prov/before/deployments.yaml | wc -l)"
+echo "After:  $(kubectl get deploy -n prov-eng --no-headers | wc -l)"
+
+# --- Check 3: PVC bound ---
+echo "=== PVC STATUS ==="
+kubectl get pvc -n prov-eng
+
+# --- Check 4: no pods failing ---
+echo "=== NON-RUNNING PODS ==="
+kubectl get pods -n prov-eng | grep -v -E "Running|Completed" \
+  || echo "All pods Running"
+```
+
+---
+
+### Pass / Fail criteria
+
+| Check | Pass | Fail — action |
+|---|---|---|
+| `diff` output | `IDENTICAL` | Lines with `<` = missing from restore; `>` = extra |
+| Deployment count | Before == After | After is lower → some Deployments missing from backup |
+| PVC status | All `Bound` | `Pending` → run manual PV claimRef clear (see §13) |
+| Pod status | All `Running` | `ErrImagePull` → run `image-restore.sh --namespace prov-eng` |
+| Image versions | Exact match | Mismatch → Deployment spec was stale at backup time |
+
+---
+
+## 11. How to Restore PostgreSQL Data
 
 ### List available dumps
 
@@ -415,7 +555,7 @@ sudo /usr/local/sbin/pg-restore.sh /backup/pg-dumps/hippo_backup_20240423_120000
 
 ---
 
-## 11. Day-2 Operations
+## 12. Day-2 Operations
 
 ### Monitoring backup health
 
@@ -489,7 +629,7 @@ http://<MINIO_HOST_IP>:9001
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 ### Pods stuck in ErrImagePull after restore
 
@@ -590,7 +730,7 @@ velero restore describe <restore-name> --details | grep -A5 "Warnings"
 
 ---
 
-## 13. Uninstall
+## 14. Uninstall
 
 ```bash
 # Remove Velero (WARNING: destroys backup CRDs and schedule history)
