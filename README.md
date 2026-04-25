@@ -205,10 +205,10 @@ PG_PASSWORD="<db_password>"       # plain-text or leave blank to use k8s secret
 
 # ── Section 3 — Velero schedules ──────────────────────
 VELERO_CRITICAL_APP_NAMESPACES="prov-eng"   # namespaces backed up every 6h
-VELERO_CLUSTER_CONFIG_NAMESPACES="prov-eng psql kube-logging ingress-nginx kube-prom"
+VELERO_CLUSTER_CONFIG_NAMESPACES="prov-eng psql kube-logging ingress-nginx kube-prom kubekey-system"
 
 # ── Section 8 — Image backup ───────────────────────────
-IMAGE_BACKUP_NAMESPACES="prov-eng psql ingress-nginx kube-prom kube-logging"
+IMAGE_BACKUP_NAMESPACES="prov-eng psql ingress-nginx kube-prom kube-logging kubekey-system kube-system"
 ```
 
 > **Do not commit `config.env` to version control** — it contains passwords.
@@ -377,10 +377,15 @@ velero restore describe <restore-name> --details
 1. Lists all Completed Velero backups
 2. Picks the most recent one (or uses --backup <name> if specified)
 3. Calls image-restore.sh --namespace <ns>  →  docker load each required image
-4. Calls velero restore create --from-backup <name> --include-namespaces <ns> --wait
-5. Patches every Deployment / StatefulSet / DaemonSet in the namespace
+4. Clears stale claimRef on any PVs that belonged to the namespace
+   (PVs retain their old claimRef after namespace deletion, blocking PVC rebinding)
+   → PVs return to Available so restored PVCs bind normally
+5. Calls velero restore create --from-backup <name> --include-namespaces <ns> --wait
+6. Patches every Deployment / StatefulSet / DaemonSet in the namespace
    with imagePullPolicy=IfNotPresent  →  kubelet will never contact a registry again
 ```
+
+> **Why step 4 is needed:** When you delete a namespace, PVCs are removed but cluster-scoped PVs keep their `spec.claimRef` (including the old PVC UID) and enter `Released` state. Velero recreates PVCs with new UIDs, so the PV controller refuses to bind — you see `volume "X" already bound to a different claim` and PVCs stay `Pending` forever. Clearing `claimRef` before the restore resets the PVs to `Available` so normal binding works.
 
 ---
 
@@ -506,6 +511,27 @@ sudo -E ./2-deploy-velero.sh patch-image-pull-policy
 # 5. Restart affected pods
 kubectl -n prov-eng rollout restart deployment/<name>
 ```
+
+### PVCs stuck in Pending — "already bound to a different claim"
+
+This happens when PVs retain a stale `claimRef` from before the namespace was deleted. The automated `restore` command handles this automatically. If you hit it manually:
+
+```bash
+# 1. Identify the stuck PVs
+kubectl get pv | grep Released
+
+# 2. For each released PV that should belong to the restored namespace, clear its claimRef
+kubectl patch pv <pv-name> --type=json \
+  -p='[{"op":"remove","path":"/spec/claimRef"}]'
+
+# 3. Verify PV is now Available
+kubectl get pv <pv-name>
+
+# 4. The PVC should bind automatically within a few seconds
+kubectl get pvc -n prov-eng
+```
+
+> **Prevention:** Always use `sudo -E ./2-deploy-velero.sh restore --namespace <ns>` instead of running `velero restore create` directly — the automated restore clears stale PV claimRefs before Velero runs.
 
 ### Velero backup stuck in "InProgress"
 
