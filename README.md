@@ -11,15 +11,16 @@
 1. [Architecture Overview](#1-architecture-overview)
 2. [Prerequisites](#2-prerequisites)
 3. [Bundle Contents](#3-bundle-contents)
-4. [Pre-Deployment Configuration](#4-pre-deployment-configuration)
-5. [Initial Deployment (run.sh)](#5-initial-deployment-runsh)
-6. [What Gets Installed](#6-what-gets-installed)
-7. [Scheduled Backup Cadence](#7-scheduled-backup-cadence)
-8. [How to Restore a Namespace](#8-how-to-restore-a-namespace)
-9. [How to Restore PostgreSQL Data](#9-how-to-restore-postgresql-data)
-10. [Day-2 Operations](#10-day-2-operations)
-11. [Troubleshooting](#11-troubleshooting)
-12. [Uninstall](#12-uninstall)
+4. [Bundle Transfer & Extraction](#4-bundle-transfer--extraction)
+5. [Pre-Deployment Configuration](#5-pre-deployment-configuration)
+6. [Initial Deployment (run.sh)](#6-initial-deployment-runsh)
+7. [What Gets Installed](#7-what-gets-installed)
+8. [Scheduled Backup Cadence](#8-scheduled-backup-cadence)
+9. [How to Restore a Namespace](#9-how-to-restore-a-namespace)
+10. [How to Restore PostgreSQL Data](#10-how-to-restore-postgresql-data)
+11. [Day-2 Operations](#11-day-2-operations)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Uninstall](#13-uninstall)
 
 ---
 
@@ -108,7 +109,71 @@ velero-airgap/
 
 ---
 
-## 4. Pre-Deployment Configuration
+## 4. Bundle Transfer & Extraction
+
+### Creating the tarball (on the internet-connected build machine)
+
+The tarball is created from the **parent** directory so that extraction always produces a `velero-airgap/` folder at the destination:
+
+```bash
+# Run from the directory ABOVE velero-airgap/
+cd /path/to/parent-of-velero-airgap
+tar -czf velero-airgap.tar.gz velero-airgap/
+```
+
+The resulting `velero-airgap.tar.gz` (~227 MB) contains `velero-airgap/` at its root.
+
+### Transferring to the air-gapped node
+
+Use whichever transfer method is available (USB drive, scp, rsync over a bastion, etc.):
+
+```bash
+# Example: copy via scp if SSH is available
+scp velero-airgap.tar.gz user@airgap-node:/tmp/
+
+# Example: copy from a mounted USB drive
+cp /mnt/usb/velero-airgap.tar.gz /tmp/
+```
+
+### Extracting on the air-gapped node
+
+Run these commands on the target node **as root**. If a previous installation exists at `/opt/velero-airgap`, it is removed and replaced cleanly:
+
+```bash
+# 1. Remove any existing installation
+rm -rf /opt/velero-airgap
+
+# 2. Extract the tarball into /opt  → produces /opt/velero-airgap/
+tar -xzf /tmp/velero-airgap.tar.gz -C /opt
+
+# 3. Ensure all scripts are executable
+chmod +x /opt/velero-airgap/*.sh /opt/velero-airgap/scripts/*.sh
+
+# 4. Move into the directory — all subsequent commands run from here
+cd /opt/velero-airgap
+```
+
+After extraction the layout is:
+
+```
+/opt/velero-airgap/
+├── run.sh
+├── 2-deploy-velero.sh
+├── 3-install-pg-backup.sh
+├── 4-install-image-backup.sh
+├── config/
+│   └── config.env          ← edit this before running anything
+├── scripts/
+├── images/
+├── binaries/
+└── cli/
+```
+
+> **Tip:** Keep the tarball in `/tmp` (or on the USB drive) as a spare. If you need to reinstall from scratch, re-extract from it rather than rebuilding the bundle.
+
+---
+
+## 5. Pre-Deployment Configuration
 
 **Edit `config/config.env` before running anything. This is the only file you need to change.**
 
@@ -150,12 +215,12 @@ IMAGE_BACKUP_NAMESPACES="prov-eng psql ingress-nginx kube-prom kube-logging"
 
 ---
 
-## 5. Initial Deployment (run.sh)
+## 6. Initial Deployment (run.sh)
 
 Once `config.env` is configured, run the master script as root:
 
 ```bash
-cd /path/to/velero-airgap
+cd /opt/velero-airgap
 sudo -E ./run.sh
 ```
 
@@ -170,7 +235,7 @@ Phase 1 — Velero + MinIO
   bootstrap-bucket       creates the velero-backups bucket, enables versioning
   install-velero         installs Velero + node-agent into the velero namespace
   patch-image-pull-policy  sets imagePullPolicy=IfNotPresent on all app workloads
-  patch-postgres         annotates postgres STS to exclude hostPath volumes
+  # patch-postgres        DISABLED in run.sh — run manually when ready (see below)
   schedules              creates critical-app-6h and cluster-config-weekly schedules
   verify                 runs a sanity backup and prints status
 
@@ -187,9 +252,14 @@ Phase 3 — image-backup
 
 **If any phase fails**, fix the error and re-run `run.sh`. Every step is idempotent — safe to re-run.
 
+> **`patch-postgres` is intentionally disabled in `run.sh`** to avoid disrupting a production PostgreSQL StatefulSet. When you are ready to annotate the postgres STS (so Velero excludes its hostPath volumes from fs-backup), run it manually:
+> ```bash
+> sudo -E ./2-deploy-velero.sh patch-postgres
+> ```
+
 ---
 
-## 6. What Gets Installed
+## 7. What Gets Installed
 
 ### systemd services
 
@@ -228,7 +298,7 @@ Phase 3 — image-backup
 
 ---
 
-## 7. Scheduled Backup Cadence
+## 8. Scheduled Backup Cadence
 
 ```
 00:00  critical-app-6h  (Velero)   ┐
@@ -254,7 +324,7 @@ Sunday 02:00  cluster-config-weekly (Velero)  weekly full-cluster snapshot
 
 ---
 
-## 8. How to Restore a Namespace
+## 9. How to Restore a Namespace
 
 Use this procedure when a namespace has been accidentally deleted or is corrupted.
 
@@ -314,7 +384,7 @@ velero restore describe <restore-name> --details
 
 ---
 
-## 9. How to Restore PostgreSQL Data
+## 10. How to Restore PostgreSQL Data
 
 ### List available dumps
 
@@ -340,7 +410,7 @@ sudo /usr/local/sbin/pg-restore.sh /backup/pg-dumps/hippo_backup_20240423_120000
 
 ---
 
-## 10. Day-2 Operations
+## 11. Day-2 Operations
 
 ### Monitoring backup health
 
@@ -414,7 +484,7 @@ http://<MINIO_HOST_IP>:9001
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### Pods stuck in ErrImagePull after restore
 
@@ -494,7 +564,7 @@ velero restore describe <restore-name> --details | grep -A5 "Warnings"
 
 ---
 
-## 12. Uninstall
+## 13. Uninstall
 
 ```bash
 # Remove Velero (WARNING: destroys backup CRDs and schedule history)
